@@ -24,6 +24,7 @@ import org.netbeans.editor.ActionFactory.ReindentLineAction;
 
 public final class ClojureReindentAction implements ActionListener {
 
+    @Override
     public void actionPerformed(ActionEvent e) {
         org.netbeans.editor.ActionFactory.ReindentLineAction a = new ReindentLineAction();
         a.actionPerformed(e);
