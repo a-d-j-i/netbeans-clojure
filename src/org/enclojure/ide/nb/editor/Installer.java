@@ -15,19 +15,20 @@
 *    Author: Eric Thorsen
 *******************************************************************************
 )
-*/
+ */
 package org.enclojure.ide.nb.editor;
 
 import clojure.lang.IFn;
 import clojure.lang.RT;
 import clojure.lang.Var;
 import clojure.lang.Symbol;
-
+import java.util.Stack;
 
 import java.util.logging.Logger;
 import java.util.logging.Level;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.enclojure.ide.core.LogAdapter;
-import org.enclojure.ide.repl.ReplPanel;
 import org.openide.modules.ModuleInstall;
 
 /**
@@ -40,83 +41,113 @@ public class Installer extends ModuleInstall {
 
     Logger etlog = Logger.getLogger("enclojure-installer");
 
-    final Var requireFn = RT.var("clojure.core","require");
-    final IFn setupTrackingFn = (IFn)RT.var("org.enclojure.ide.nb.classpaths.listeners", "start-service");
-    final IFn stopTrackingFn = (IFn)RT.var("org.enclojure.ide.nb.classpaths.listeners", "stop-service");
+    final Var requireFn = RT.var("clojure.core", "require");
+    final IFn setupTrackingFn = (IFn) RT.var("org.enclojure.ide.nb.classpaths.listeners", "start-service");
+    final IFn stopTrackingFn = (IFn) RT.var("org.enclojure.ide.nb.classpaths.listeners", "stop-service");
 
     @Override
     public void restored() {
-        etlog.log(Level.INFO,"Enclojure Starting the installer script stuff");
-        try {
+        boolean keepgoing = true;
+        Stack<String> toLoad = new Stack<>();
+        String lastload = "";
+        etlog.log(Level.INFO, "Enclojure Starting the installer script stuff");
+        LOG.log(Level.INFO, "Enclojure module restored.");
+        do {
+            try {
+                while (!toLoad.empty()) {
+                    String t = toLoad.pop();
+                    if (lastload.equals(t)) {
+                        keepgoing = false;
+                    }
+                    lastload = t;
+                    requireFn.invoke(Symbol.create(t));
+                }
 
-            LOG.log(Level.INFO, "Enclojure module restored.");
+                requireFn.invoke(Symbol.create("org.enclojure.ide.navigator.CljClassVisitor"));
+                LOG.log(Level.INFO, "Enclojure CljClassVisitor.");
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.classpaths.resource-tracking"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.symbol-caching"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.classpaths.listeners"));
+                etlog.log(Level.INFO, "Enclojure installer 1");
+                // requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.symbol-meta"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.file-mapping"));
+                etlog.log(Level.INFO, "Enclojure installer 2");
+                // This is needed for dynamically loading repl code.
+                requireFn.invoke(Symbol.create("org.enclojure.commons.meta-utils"));
+                requireFn.invoke(Symbol.create("org.enclojure.repl.main"));
 
-            requireFn.invoke(Symbol.create("org.enclojure.ide.navigator.CljClassVisitor"));
-           LOG.log(Level.INFO, "Enclojure CljClassVisitor.");
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.classpaths.resource-tracking"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.symbol-caching"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.classpaths.listeners"));
-            etlog.log(Level.INFO,"Enclojure installer 1");
-           // requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.symbol-meta"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.file-mapping"));
-            etlog.log(Level.INFO,"Enclojure installer 2");
-            // This is needed for dynamically loading repl code.
-            requireFn.invoke(Symbol.create("org.enclojure.commons.meta-utils"));
-            requireFn.invoke(Symbol.create("org.enclojure.repl.main"));
+                LOG.log(Level.INFO, "Enclojure module Calling setup tracking.");
+                setupTrackingFn.invoke();
+                LOG.log(Level.INFO, "Enclojure module Setup tracking completed.");
+                etlog.log(Level.INFO, "Enclojure installer 3");
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.utils"));
+                //requireFn.invoke(Symbol.create("org.enclojure.repl.repl-manager-ui"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.actions.token-navigator"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.actions.CljComment"));
+                //  requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.clj-language-support"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.common.classpath-utils"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.clojure.project.create"));
+                //requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.repl-tc"));
+                // options
+                requireFn.invoke(Symbol.create("org.enclojure.ide.preferences.platform-options"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.preferences.enclojure-options-category"));
+                etlog.log(Level.INFO, "Enclojure installer 4");
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.repl-focus"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.actions.action-handler"));
+                //??RT.var("org.enclojure.ide.nb.editor.repl-tc", "init-repl-tc").invoke();
+                requireFn.invoke(Symbol.create("org.enclojure.ide.navigator.analyze"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.folding.manager"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.parser"));
 
-            LOG.log(Level.INFO, "Enclojure module Calling setup tracking.");
-            setupTrackingFn.invoke();
-            LOG.log(Level.INFO, "Enclojure module Setup tracking completed.");
-            etlog.log(Level.INFO,"Enclojure installer 3");
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.utils"));
-            //requireFn.invoke(Symbol.create("org.enclojure.repl.repl-manager-ui"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.actions.token-navigator"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.actions.CljComment"));
-          //  requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.clj-language-support"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.common.classpath-utils"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.clojure.project.create"));            
-            //requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.repl-tc"));
-            // options
-            requireFn.invoke(Symbol.create("org.enclojure.ide.preferences.platform-options"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.preferences.enclojure-options-category"));
-            etlog.log(Level.INFO,"Enclojure installer 4");
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.repl-focus"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.actions.action-handler"));
-            //??RT.var("org.enclojure.ide.nb.editor.repl-tc", "init-repl-tc").invoke();
-            requireFn.invoke(Symbol.create("org.enclojure.ide.navigator.analyze"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.folding.manager"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.parser"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.hyperlinks"));
 
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.hyperlinks"));
-
-            etlog.log(Level.INFO,"Enclojure installer 5");
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.completion-item"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.completion-task"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.completion-provider"));
-            // This is now in the ide project.
-            requireFn.invoke(Symbol.create("org.enclojure.ide.navigator.views.navigator-panel"));
-            //requireFn.invoke(Symbol.create("org.enclojure.ide.navigator.navigator-panel"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.data-object-listener"));
-            etlog.log(Level.INFO,"Enclojure installer 6");
-            requireFn.invoke(Symbol.create("org.enclojure.ide.debugger.jdi-eval"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.source.add-file"));
-            requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.repl-win"));
-            LOG.log(Level.INFO, "Enclojure module all calls to required are completed.");
-            etlog.log(Level.INFO,"Enclojure installer 7");
-        } catch (Exception ex) {
-            LOG.log(Level.SEVERE,ex.getMessage(), ex);
-            etlog.log(Level.SEVERE,"Enclojure installer Exception"+ex.getMessage());
-        }
+                etlog.log(Level.INFO, "Enclojure installer 5");
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.completion-item"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.completion-task"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.completion.completion-provider"));
+                // This is now in the ide project.
+                requireFn.invoke(Symbol.create("org.enclojure.ide.navigator.views.navigator-panel"));
+                //requireFn.invoke(Symbol.create("org.enclojure.ide.navigator.navigator-panel"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.data-object-listener"));
+                etlog.log(Level.INFO, "Enclojure installer 6");
+                requireFn.invoke(Symbol.create("org.enclojure.ide.debugger.jdi-eval"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.source.add-file"));
+                requireFn.invoke(Symbol.create("org.enclojure.ide.nb.editor.repl-win"));
+                LOG.log(Level.INFO, "Enclojure module all calls to required are completed.");
+                etlog.log(Level.INFO, "Enclojure installer 7");
+            } catch (clojure.lang.Compiler.CompilerException ex) {
+                LOG.log(Level.INFO, ex.getMessage(), ex);
+                etlog.log(Level.INFO, "Enclojure installer Exception" + ex.getMessage());
+                String pattern = "(.*)(java.lang.ClassNotFoundException:\\s*)(.*)(\\s*,)";
+                Pattern r = Pattern.compile(pattern);
+                Matcher m = r.matcher(ex.getMessage());
+                if (m.find()) {
+                    System.out.println("Found value: -" + m.group(3) + "-");
+                    toLoad.push(m.group(3));
+                } else {
+                    LOG.log(Level.SEVERE, ex.getMessage(), ex);
+                    etlog.log(Level.SEVERE, "Enclojure installer Exception" + ex.getMessage());
+                    keepgoing = false;
+                    throw ex;
+                }
+            } catch (Exception ex) {
+                LOG.log(Level.SEVERE, ex.getMessage(), ex);
+                etlog.log(Level.SEVERE, "Enclojure installer Exception" + ex.getMessage());
+                keepgoing = false;
+                throw ex;
+            }
+        } while (keepgoing);
     }
 
-   @Override
-   public boolean closing() {
-       try {
-           stopTrackingFn.invoke();
-           RT.var("org.enclojure.ide.repl.repl-manager", "stop-repl-servers").invoke();
-       } catch (Throwable e) {
-            LOG.log(Level.SEVERE,e.getMessage(), e);
-       }
-       return true;
-   }
+    @Override
+
+    public boolean closing() {
+        try {
+            stopTrackingFn.invoke();
+            RT.var("org.enclojure.ide.repl.repl-manager", "stop-repl-servers").invoke();
+        } catch (Throwable e) {
+            LOG.log(Level.SEVERE, e.getMessage(), e);
+        }
+        return true;
+    }
 }
